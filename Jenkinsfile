@@ -8,7 +8,11 @@ pipeline {
     stages {
         stage('Run QA Tests') {
             steps {
-                bat 'cd "C:\\Users\\DELL\\IdeaProjects\\Crossref_JUnit" && mvn clean test'
+                bat '''
+                    cd "C:\\Users\\DELL\\IdeaProjects\\Crossref_JUnit"
+                    mvn clean test
+                    xcopy /E /I /Y "target\\allure-results" "%WORKSPACE%\\allure-results"
+                '''
             }
         }
     }
@@ -18,7 +22,7 @@ pipeline {
             allure([
                 includeProperties: false,
                 jdk: '',
-                results: [[path: 'C:\\Users\\DELL\\IdeaProjects\\Crossref_JUnit\\target\\allure-results']]
+                results: [[path: 'allure-results']]
             ])
         }
     }
