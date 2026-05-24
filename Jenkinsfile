@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     tools {
-        allure 'allure'  // Tools'da tanımladığınız isim
+        allure 'allure'
     }
 
     stages {
@@ -15,7 +15,6 @@ pipeline {
 
     post {
         always {
-            // Allure raporu oluştur
             allure([
                 includeProperties: false,
                 jdk: '',
