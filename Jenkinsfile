@@ -1,18 +1,26 @@
 pipeline {
     agent any
 
+    tools {
+        allure 'allure'  // Tools'da tanımladığınız isim
+    }
+
     stages {
-        stage('Checkout Code') {
+        stage('Run QA Tests') {
             steps {
-                checkout scm
+                bat 'cd "C:\\Users\\DELL\\IdeaProjects\\Crossref_JUnit" && mvn clean test'
             }
         }
+    }
 
-        stage('Run Crossref Tests') {
-            steps {
-                // Jenkins'e testi koşarken lokaldeki tüm Maven argümanlarını dikkate almasını söylüyoruz
-                bat 'mvn clean test -Dallure.results.directory=allure-results'
-            }
+    post {
+        always {
+            // Allure raporu oluştur
+            allure([
+                includeProperties: false,
+                jdk: '',
+                results: [[path: 'C:\\Users\\DELL\\IdeaProjects\\Crossref_JUnit\\target\\allure-results']]
+            ])
         }
     }
 }
