@@ -1,0 +1,1 @@
+{"uuid":"fe615efd-d218-4f20-a856-dc368b3b880d","name":"DOI with special characters in suffix should be correctly URL-encoded and resolved","children":["93fc44e2-4000-4d98-823e-093868a8f767"],"befores":[],"afters":[],"start":1779620935284,"stop":1779620935728}

@@ -1,0 +1,1 @@
+{"uuid":"3ab468b3-97da-4ef9-8a0f-e453910c48e7","name":"Successful DOI query should return query_result with status='resolved'","children":["635ab3c2-522c-47a4-84b6-418641cd9ce7"],"befores":[],"afters":[],"start":1779619728476,"stop":1779619728925}

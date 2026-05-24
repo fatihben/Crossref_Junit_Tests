@@ -10,8 +10,8 @@ pipeline {
 
         stage('Run Crossref Tests') {
             steps {
-                // Eklenti bağımlılığı yaratmamak için düz bat komutuyla testi tetikliyoruz
-                bat 'mvn clean test'
+                // Jenkins'e testi koşarken lokaldeki tüm Maven argümanlarını dikkate almasını söylüyoruz
+                bat 'mvn clean test -Dallure.results.directory=allure-results'
             }
         }
     }
