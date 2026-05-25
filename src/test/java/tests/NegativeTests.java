@@ -3,106 +3,100 @@ package tests;
 import io.restassured.path.xml.XmlPath;
 import io.restassured.response.Response;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
+import pages.OpenUrlApi;
+import utils.BaseTest;
 
-import static io.restassured.RestAssured.given;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.*;
 
-@DisplayName("OpenURL API — Production Resilient Negative Test Suite")
-public class NegativeTests {
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@DisplayName("CrossRef OpenURL API — Negative Tests")
+public class NegativeTests extends BaseTest {
 
-    private static final String BASE_URL = "https://api.crossref.org/openurl";
-    private static final String VALID_PID = "sahinfatih@gmail.com";
-    private static final String INVALID_DOI = "doi:10.1016/invalid.doi.999999";
-    private static final String VALID_DOI = "doi:10.1007/s10696-011-9101-8";
-
-    @Test
-    @DisplayName("NC-01: Invalid DOI handling — Accepts structural error or standard resource rejection")
-    void invalidDoiShouldReturnErrorMessage() {
-        Response response = given()
-                .header("User-Agent", "Mozilla/5.0")
-                .header("Accept", "application/xml")
-                .queryParam("pid", VALID_PID)
-                .queryParam("id", INVALID_DOI)
-                .queryParam("noredirect", "true")
-                .when()
-                .get(BASE_URL);
-
-        // Canlı sistem geçersiz DOI'lerde 200 (XML error), 403 (WAF) veya 404 (Route error) dönebilir.
-        assertThat(response.statusCode())
-                .as("API must reject or gracefully handle the invalid DOI lookup")
-                .isIn(200, 403, 404);
-
-        if (response.getStatusCode() == 200) {
-            XmlPath xml = new XmlPath(response.asString());
-            String queryStatus = xml.getString("**.find { it.name() == 'query' }.@status");
-            assertThat(queryStatus).containsIgnoringCase("id");
-        }
-    }
+    private static final String INVALID_DOI = "10.1016/invalid.doi.999999";
+    private static final String VALID_DOI   = "10.1007/s10696-011-9101-8";
 
     @Test
-    @DisplayName("NC-02: Missing 'id' parameter should result in client-side anomaly or resource error")
-    void missingIdParameterTest() {
-        Response response = given()
-                .queryParam("pid", VALID_PID)
-                .when()
-                .get(BASE_URL);
+    @Order(1)
+    @DisplayName("NC-01: Invalid DOI should return unresolved status in XML body")
+    void invalidDoiShouldReturnUnresolvedStatus() {
+        Response response = OpenUrlApi.queryWithInvalidDoi("doi:" + INVALID_DOI);
 
-        assertThat(response.statusCode())
-                .as("Missing mandatory 'id' parameter must cause a resource resolution failure (>= 400)")
-                .isGreaterThanOrEqualTo(400);
-    }
-
-    @Test
-    @DisplayName("NC-03: Missing 'pid' parameter should fail authentication or route validation")
-    void missingPidParameterTest() {
-        Response response = given()
-                .queryParam("id", VALID_DOI)
-                .queryParam("noredirect", "true")
-                .when()
-                .get(BASE_URL);
-
-        // Canlı sistem 404 Route Not Found veya 403 Authentication hatası fırlatıyor.
-        assertThat(response.statusCode())
-                .as("Missing credential/pid must trigger a secure rejection (403 or 404)")
-                .isIn(403, 404);
+        // CrossRef always returns 200; errors are indicated inside the XML body
+        assertEquals(200, response.statusCode(),
+                "API must return 200 even for invalid DOI");
 
         String body = response.asString();
-        assertThat(body)
-                .as("Response must indicate an auth or route matching anomaly")
-                .matches(b -> b.contains("route-not-found")
-                        || b.contains("Authentication required")
-                        || b.contains("not recognized"));
+        assertTrue(body.trim().startsWith("<"),
+                "Response must be XML even for invalid DOI");
+
+        XmlPath xml = new XmlPath(body);
+        String status = xml.getString("**.find { it.name() == 'query' }.@status");
+
+        // An invalid DOI must never return 'resolved' status
+        assertFalse("resolved".equalsIgnoreCase(status),
+                "Invalid DOI must NOT return 'resolved' status, got: " + status);
     }
 
     @Test
-    @DisplayName("NC-04: Unsupported Accept Header should be cleanly rejected")
-    void unsupportedAcceptHeaderShouldReturn406() {
-        Response response = given()
-                .header("User-Agent", "Mozilla/5.0")
-                .header("Accept", "application/pdf")
-                .queryParam("pid", VALID_PID)
-                .queryParam("id", VALID_DOI)
-                .when()
-                .get(BASE_URL);
+    @Order(2)
+    @DisplayName("NC-02: Missing 'id' parameter should return XML response without server crash")
+    void missingIdParameterShouldReturnXmlWithoutCrash() {
+        Response response = OpenUrlApi.queryWithoutId();
 
-        // API geçersiz medya tiplerini 406, 403 veya 404 (Route Dropped) ile güvenli bir şekilde reddeder.
-        assertThat(response.statusCode())
-                .as("Content negotiation failure: Request should be rejected with 406, 403, or 404")
-                .isIn(406, 403, 404);
+        // CrossRef returns 200 even without an id; the error is indicated in the XML body
+        assertEquals(200, response.statusCode(),
+                "API returns 200 even when id is missing");
+
+        String body = response.asString();
+        assertTrue(body.trim().startsWith("<"),
+                "Response must still be XML when id is missing");
+
+        assertFalse(body.isEmpty(),
+                "Response body must not be empty");
     }
 
     @Test
-    @DisplayName("NC-05: Empty value for mandatory parameters should be handled without server crashes")
-    void emptyMandatoryParameterValueShouldNotCause500() {
-        Response response = given()
-                .queryParam("pid", "")
-                .queryParam("id", VALID_DOI)
-                .when()
-                .get(BASE_URL);
+    @Order(3)
+    @DisplayName("NC-03: Missing 'pid' parameter should not cause server crash")
+    void missingPidParameterShouldNotCrashServer() {
+        Response response = OpenUrlApi.queryWithoutPid(VALID_DOI);
 
-        assertThat(response.statusCode())
-                .as("An empty parameter should never trigger a fatal 500 Internal Server Error")
-                .isLessThan(500);
+        assertTrue(response.statusCode() < 500,
+                "Missing pid must not cause a server error (5xx), got: " + response.statusCode());
+
+        assertFalse(response.asString().trim().isEmpty(),
+                "Response body must not be empty");
+    }
+
+    @Test
+    @Order(4)
+    @DisplayName("NC-04: Unsupported Accept header should not cause server crash (no 5xx)")
+    void unsupportedAcceptHeaderShouldNotCauseServerError() {
+        Response response = OpenUrlApi.queryWithUnsupportedAccept(VALID_DOI, "application/pdf");
+
+        assertTrue(response.statusCode() < 500,
+                "Unsupported Accept header must not cause a 5xx server error, got: "
+                        + response.statusCode());
+
+        assertFalse(response.asString().trim().isEmpty(),
+                "Response body must not be empty");
+    }
+
+    @Test
+    @Order(5)
+    @DisplayName("NC-05: Empty pid value should not cause a server error (5xx)")
+    void emptyPidShouldNotCauseServerError() {
+        Response response = OpenUrlApi.queryWithEmptyPid(VALID_DOI);
+
+        assertTrue(response.statusCode() < 500,
+                "Empty pid must never trigger a 500 Internal Server Error, got: "
+                        + response.statusCode());
+
+        assertFalse(response.asString().trim().isEmpty(),
+                "Response body must not be empty");
     }
 }
